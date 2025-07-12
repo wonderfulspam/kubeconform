@@ -384,7 +384,10 @@ func downloadSchema(registries []registry.Registry, l jsonschema.SchemeURLLoader
 			if err != nil {
 				continue
 			}
-			return schema, nil
+			if schema != nil && isSchemaForKind(schema, kind) {
+				return schema, nil
+			}
+			continue
 		}
 
 		if _, notfound := err.(*loader.NotFoundError); notfound {
@@ -398,4 +401,27 @@ func downloadSchema(registries []registry.Registry, l jsonschema.SchemeURLLoader
 	}
 
 	return nil, nil // No schema found - we don't consider it an error, resource will be skipped
+}
+
+func isSchemaForKind(schema *jsonschema.Schema, expectedKind string) bool {
+	if schema == nil {
+		return true
+	}
+
+	if schemaMap, ok := schema.Meta.(map[string]interface{}); ok {
+		if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
+			if kindProp, ok := properties["kind"].(map[string]interface{}); ok {
+				if enum, ok := kindProp["enum"].([]interface{}); ok && len(enum) > 0 {
+					if enumKind, ok := enum[0].(string); ok {
+						return enumKind == expectedKind
+					}
+				}
+				if constVal, ok := kindProp["const"].(string); ok {
+					return constVal == expectedKind
+				}
+			}
+		}
+	}
+
+	return true
 }
